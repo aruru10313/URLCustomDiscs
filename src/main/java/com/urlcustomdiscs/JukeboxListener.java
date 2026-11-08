@@ -278,19 +278,14 @@ public class JukeboxListener implements Listener {
         World world = jukeboxLocation.getWorld();
         if (world == null) return;
 
-        String dimension = world.getKey().toString();
-        // example dimension result: minecraft:overworld, minecraft:the_nether, minecraft:multiverse_core_world
-
-        for (String currentSoundKey : activeSounds) {
-            plugin.getServer().dispatchCommand(
-                    plugin.getServer().getConsoleSender(),
-                    "execute in " + dimension +
-                            " positioned " +
-                            jukeboxLocation.getBlockX() + " " +
-                            jukeboxLocation.getBlockY() + " " +
-                            jukeboxLocation.getBlockZ() +
-                            " run stopsound @a[distance=..80] * " + currentSoundKey
-            );
+        // Stop the sound for nearby players through the API. (Dispatching /stopsound from the console
+        // echoed "[Server: ... 소리를 멈췄습니다]" into every operator's chat.)
+        Location center = jukeboxLocation.clone().add(0.5, 0.5, 0.5);
+        for (org.bukkit.entity.Player p : world.getPlayers()) {
+            if (p.getLocation().distanceSquared(center) > 80 * 80) continue;
+            for (String currentSoundKey : activeSounds) {
+                p.stopSound(currentSoundKey);
+            }
         }
     }
 }
