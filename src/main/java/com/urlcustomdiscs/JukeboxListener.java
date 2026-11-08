@@ -256,6 +256,20 @@ public class JukeboxListener implements Listener {
     }
 
     /**
+     * Stops a custom track for one player. Bukkit's stopSound(String) without a category stops only
+     * the MASTER category, but discs play in RECORDS, so name the category; the Adventure stop
+     * (no source = every category, like vanilla "/stopsound @a * <sound>") covers anything else.
+     */
+    public static void stopForPlayer(org.bukkit.entity.Player p, String soundKey) {
+        p.stopSound(soundKey, org.bukkit.SoundCategory.RECORDS);
+        try {
+            p.stopSound(net.kyori.adventure.sound.SoundStop.named(net.kyori.adventure.key.Key.key(soundKey)));
+        } catch (RuntimeException | LinkageError ignored) {
+            // not a Paper server or not a valid key: the RECORDS stop above still applies
+        }
+    }
+
+    /**
      * Stops every custom track this plugin started and gives the discs back by dropping them at
      * their jukeboxes. Used by /customdisc stop and on disable, since playback state only lives in
      * memory (a reload would otherwise leave tracks playing and swallow the inserted discs).
@@ -312,7 +326,7 @@ public class JukeboxListener implements Listener {
         for (org.bukkit.entity.Player p : world.getPlayers()) {
             if (p.getLocation().distanceSquared(center) > 80 * 80) continue;
             for (String currentSoundKey : activeSounds) {
-                p.stopSound(currentSoundKey);
+                stopForPlayer(p, currentSoundKey);
             }
         }
     }

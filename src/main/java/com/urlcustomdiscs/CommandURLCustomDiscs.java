@@ -298,7 +298,7 @@ public class CommandURLCustomDiscs implements CommandExecutor {
             int jukeboxes = plugin.getJukeboxListener() != null ? plugin.getJukeboxListener().stopAll() : 0;
             JSONObject discData = DiscUtils.loadDiscData(discUuidFile);
             for (Player online : Bukkit.getOnlinePlayers()) {
-                for (String name : discData.keySet()) online.stopSound(plugin.soundKey(name));
+                for (String name : discData.keySet()) JukeboxListener.stopForPlayer(online, plugin.soundKey(name));
             }
             player.sendMessage(ChatColor.GREEN + "Stopped all custom disc music (" + jukeboxes + " jukebox(es); inserted discs were dropped back).");
             return true;
