@@ -80,7 +80,12 @@ public class JukeboxListener implements Listener {
 
         // Check if the jukebox contains a physical vanilla disc (do nothing - ejects the disc)
         if (currentRecord.getType() != Material.AIR) {
-            // Remove the stored custom disc info
+            // Vanilla ejects the physical disc. If a custom track was started here (e.g. the disc
+            // ended up physically inserted), stop it too, otherwise it keeps playing with no way to stop it.
+            if (activeSounds != null && !activeSounds.isEmpty()) {
+                stopCustomJukeboxSounds(jukeboxLocation, activeSounds);
+                activeJukeboxes.remove(jukeboxLocation);
+            }
             customDiscsInJukeboxes.remove(jukeboxLocation);
             return;
         }
@@ -248,6 +253,29 @@ public class JukeboxListener implements Listener {
 
         // Clean up the jukebox from the active jukeboxes map and the stored custom disc info
         cleanupJukebox(jukeboxLocation);
+    }
+
+    /**
+     * Stops every custom track this plugin started and gives the discs back by dropping them at
+     * their jukeboxes. Used by /customdisc stop and on disable, since playback state only lives in
+     * memory (a reload would otherwise leave tracks playing and swallow the inserted discs).
+     *
+     * @return how many jukeboxes were stopped
+     */
+    public int stopAll() {
+        int stopped = 0;
+        for (Map.Entry<Location, Set<String>> e : new HashMap<>(activeJukeboxes).entrySet()) {
+            if (e.getValue() == null || e.getValue().isEmpty()) continue;
+            stopCustomJukeboxSounds(e.getKey(), e.getValue());
+            ItemStack disc = customDiscsInJukeboxes.get(e.getKey());
+            if (disc != null && e.getKey().getWorld() != null && e.getKey().isChunkLoaded()) {
+                dropCustomDisc(e.getKey(), disc);
+            }
+            stopped++;
+        }
+        activeJukeboxes.clear();
+        customDiscsInJukeboxes.clear();
+        return stopped;
     }
 
     // Cleanup method for when jukeboxes are destroyed

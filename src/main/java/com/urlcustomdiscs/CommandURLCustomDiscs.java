@@ -88,6 +88,8 @@ public class CommandURLCustomDiscs implements CommandExecutor {
             player.sendMessage("");
             player.sendMessage(ChatColor.WHITE + "" + ChatColor.BOLD + "Show details of the custom music disc you're holding:");
             player.sendMessage(ChatColor.YELLOW + "/customdisc info");
+            player.sendMessage(ChatColor.GRAY + "Force-stop all custom disc music:");
+            player.sendMessage(ChatColor.YELLOW + "/customdisc stop");
             player.sendMessage("");
             player.sendMessage(ChatColor.WHITE + "" + ChatColor.BOLD + "Update Deno and yt-dlp dependencies:");
             player.sendMessage(ChatColor.YELLOW + "/customdisc updatedep");
@@ -291,6 +293,17 @@ public class CommandURLCustomDiscs implements CommandExecutor {
         }
 
         // Command to get information about the disc in hand
+        // Command to force-stop every custom track (e.g. one that kept playing after its jukebox was emptied)
+        if (args.length == 1 && args[0].equalsIgnoreCase("stop")) {
+            int jukeboxes = plugin.getJukeboxListener() != null ? plugin.getJukeboxListener().stopAll() : 0;
+            JSONObject discData = DiscUtils.loadDiscData(discUuidFile);
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                for (String name : discData.keySet()) online.stopSound(plugin.soundKey(name));
+            }
+            player.sendMessage(ChatColor.GREEN + "Stopped all custom disc music (" + jukeboxes + " jukebox(es); inserted discs were dropped back).");
+            return true;
+        }
+
         if (args.length == 1 && args[0].equalsIgnoreCase("info")) {
             ItemStack itemInHand = player.getInventory().getItemInMainHand();
 

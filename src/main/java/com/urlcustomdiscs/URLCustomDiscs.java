@@ -33,6 +33,7 @@ public class URLCustomDiscs extends JavaPlugin {
     private String editOnlyModeZipFilePath;
     private String duplicatedZipFilePath;
     private String oraxenPackFolder;
+    private JukeboxListener jukeboxListener;
     private String oraxenReloadCommand;
 
     @Override
@@ -91,15 +92,19 @@ public class URLCustomDiscs extends JavaPlugin {
         boolean protocolLibEnabled = getServer().getPluginManager().isPluginEnabled("ProtocolLib");
         if (protocolLibEnabled) {
             getLogger().info("ProtocolLib detected! Custom Now Playing toasts will be available.");
-            getServer().getPluginManager().registerEvents(new JukeboxListener(this, true), this);
+            jukeboxListener = new JukeboxListener(this, true);
+            getServer().getPluginManager().registerEvents(jukeboxListener, this);
         } else {
             getLogger().warning("ProtocolLib is not installed! The plugin will work normally, but custom Now Playing toasts will not be available.");
-            getServer().getPluginManager().registerEvents(new JukeboxListener(this, false), this);
+            jukeboxListener = new JukeboxListener(this, false);
+            getServer().getPluginManager().registerEvents(jukeboxListener, this);
         }
     }
 
     @Override
     public void onDisable() {
+        // playback state is in memory only: stop the tracks and hand the discs back before it is lost
+        if (jukeboxListener != null) jukeboxListener.stopAll();
         getLogger().info("URLCustomDiscs disabled!");
     }
 
@@ -358,6 +363,7 @@ public class URLCustomDiscs extends JavaPlugin {
     public boolean isLocalMode() {
         return "self-hosted".equalsIgnoreCase(pluginUsageMode) || "edit-only".equalsIgnoreCase(pluginUsageMode) || isOraxenMode();
     }
+    public JukeboxListener getJukeboxListener() { return jukeboxListener; }
     public boolean isOraxenMode() { return "oraxen".equalsIgnoreCase(pluginUsageMode); }
     public String getOraxenPackFolder() { return oraxenPackFolder != null ? oraxenPackFolder : "Oraxen/pack"; }
     public String getOraxenReloadCommand() { return oraxenReloadCommand != null ? oraxenReloadCommand : "oraxen reload pack"; }
