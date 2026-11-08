@@ -1,9 +1,9 @@
 name: URLCustomDiscs
 main: com.urlcustomdiscs.URLCustomDiscs
-version: 2.7.2
+version: 2.7.2-oraxen
 api-version: 1.21
 author: Théo DAL GOBBO
-softdepend: [ProtocolLib]
+softdepend: [ProtocolLib, Oraxen]
 commands:
   customdisc:
     description: "Create and play custom music discs from YouTube URLs or local MP3 files with real-time updates for players."

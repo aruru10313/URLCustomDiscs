@@ -45,6 +45,11 @@ public class YtDlpManager {
                             : "deno"
             );
             pb.environment().put("DENO_PATH", denoFile.getAbsolutePath());
+            // yt-dlp looks up deno (YouTube JS challenges) and ffmpeg on PATH, so put the bundled ones there
+            File ffmpegDir = new File(plugin.getBinFolder(), "FFmpeg");
+            String path = pb.environment().getOrDefault("PATH", "");
+            pb.environment().put("PATH", plugin.getBinFolder().getAbsolutePath() + File.pathSeparator
+                    + ffmpegDir.getAbsolutePath() + File.pathSeparator + path);
 
             pb.redirectErrorStream(true); // Merge stderr in stdout
             Process process = pb.start();

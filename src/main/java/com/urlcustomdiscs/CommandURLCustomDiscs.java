@@ -37,10 +37,12 @@ public class CommandURLCustomDiscs implements CommandExecutor {
     private final URLCustomDiscs.OS os;
     private final RemoteApiClient remoteApiClient;
     private final SelfHostedManager selfHostedManager;
+    private final OraxenPackManager oraxenPackManager;
     private final File discUuidFile;
     private final String pluginUsageMode;
 
-    public CommandURLCustomDiscs(URLCustomDiscs plugin, URLCustomDiscs.OS os, RemoteApiClient remoteApiClient, SelfHostedManager selfHostedManager) {
+    public CommandURLCustomDiscs(URLCustomDiscs plugin, URLCustomDiscs.OS os, RemoteApiClient remoteApiClient, SelfHostedManager selfHostedManager, OraxenPackManager oraxenPackManager) {
+        this.oraxenPackManager = oraxenPackManager;
         this.plugin = plugin;
         this.os = os;
         this.remoteApiClient = remoteApiClient;
@@ -91,9 +93,10 @@ public class CommandURLCustomDiscs implements CommandExecutor {
             player.sendMessage(ChatColor.YELLOW + "/customdisc updatedep");
             player.sendMessage("");
             player.sendMessage(ChatColor.DARK_AQUA + "" + ChatColor.BOLD + "Other useful vanilla commands:");
-            player.sendMessage(ChatColor.AQUA + "/playsound minecraft:customdisc." + ChatColor.DARK_AQUA + "<" + ChatColor.AQUA + "disc_name" + ChatColor.DARK_AQUA + "> " + ChatColor.AQUA + "ambient @a ~ ~ ~ 1 1");
+            String soundPrefix = plugin.isOraxenMode() ? OraxenPackManager.NAMESPACE + ":" : "minecraft:customdisc.";
+            player.sendMessage(ChatColor.AQUA + "/playsound " + soundPrefix + ChatColor.DARK_AQUA + "<" + ChatColor.AQUA + "disc_name" + ChatColor.DARK_AQUA + "> " + ChatColor.AQUA + "ambient @a ~ ~ ~ 1 1");
             player.sendMessage("");
-            player.sendMessage(ChatColor.AQUA + "/stopsound @a * minecraft:customdisc." + ChatColor.DARK_AQUA + "<" + ChatColor.AQUA + "disc_name" + ChatColor.DARK_AQUA + ">");
+            player.sendMessage(ChatColor.AQUA + "/stopsound @a * " + soundPrefix + ChatColor.DARK_AQUA + "<" + ChatColor.AQUA + "disc_name" + ChatColor.DARK_AQUA + ">");
             player.sendMessage("");
             return true;
         }
@@ -114,8 +117,7 @@ public class CommandURLCustomDiscs implements CommandExecutor {
                 // Download the mp3 for api mode, if local yt-dlp is enabled
                 // Download the mp3 for self-hosted and edit-only modes
                 if (("api".equalsIgnoreCase(pluginUsageMode) && plugin.getLocalYtDlp())
-                        || "self-hosted".equalsIgnoreCase(pluginUsageMode)
-                        || "edit-only".equalsIgnoreCase(pluginUsageMode)) {
+                        || plugin.isLocalMode()) {
 
                     // Download the MP3 file from the URL in the audio_to_send folder (api) or edit_resource_pack/temp_audio folder (self-hosted and edit-only)
                     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -151,6 +153,7 @@ public class CommandURLCustomDiscs implements CommandExecutor {
                                         });
                                     });
                                 });
+                                return; // the retry above continues the creation if it succeeds
                             }
                             continueDiscCreation(player, mp3File.getName(), rawDiscName, audioType);
                         });
@@ -186,7 +189,7 @@ public class CommandURLCustomDiscs implements CommandExecutor {
                             player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "Unable to read the duration of the audio file.");
                             return true;
                         }
-                    } else if ("self-hosted".equalsIgnoreCase(pluginUsageMode) || "edit-only".equalsIgnoreCase(pluginUsageMode)) {
+                    } else if (plugin.isLocalMode()) {
                         File destFile = new File(plugin.getTempAudioFolder(), input);
                         try { // Move the MP3 file from the audio_to_send folder to the edit_resource_pack/temp_audio folder
                             Files.move(localMp3.toPath(), destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
@@ -275,6 +278,9 @@ public class CommandURLCustomDiscs implements CommandExecutor {
 
                 remoteApiClient.deleteCustomDiscRemotely(player, discName, discInfoFinal, token, minecraftServerVersion);
                 return true;
+            } else if (plugin.isOraxenMode()) {
+                oraxenPackManager.deleteCustomDisc(player, discName);
+                return true;
             } else if ("self-hosted".equalsIgnoreCase(pluginUsageMode) || "edit-only".equalsIgnoreCase(pluginUsageMode)) {
                 selfHostedManager.deleteCustomDisc(player, discName, discInfoFinal);
                 return true;
@@ -302,7 +308,7 @@ public class CommandURLCustomDiscs implements CommandExecutor {
                         JSONObject discInfo = discData.getJSONObject(discName);
                         String displayName = discInfo.getString("displayName");
                         String discUUID = discInfo.getString("uuid");
-                        String soundKey = "customdisc." + discName.toLowerCase().replaceAll(" ", "_");
+                        String soundKey = plugin.soundKey(discName.toLowerCase().replaceAll(" ", "_"));
 
                         // Send information to the player
                         player.sendMessage(ChatColor.GRAY + "Disc played: " + ChatColor.GOLD + discName);
@@ -332,8 +338,7 @@ public class CommandURLCustomDiscs implements CommandExecutor {
                         "To enable it, open the config.yml file, set 'localYtDlp: true', and restart the server.");
                 return true;
             } else if (("api".equalsIgnoreCase(pluginUsageMode) && plugin.getLocalYtDlp())
-                    || "self-hosted".equalsIgnoreCase(pluginUsageMode)
-                    || "edit-only".equalsIgnoreCase(pluginUsageMode)) {
+                    || plugin.isLocalMode()) {
 
                 player.sendMessage(ChatColor.GRAY + "Checking for Deno and yt-dlp updates...");
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -383,6 +388,8 @@ public class CommandURLCustomDiscs implements CommandExecutor {
             } else {
                 remoteApiClient.createCustomDiscRemotely(player, finalAudioIdentifier, discName, audioType, discInfoFinal, plugin.getToken(), minecraftServerVersion);
             }
+        } else if (plugin.isOraxenMode()) {
+            oraxenPackManager.createCustomDisc(player, finalAudioIdentifier, discName, audioType, discInfoFinal);
         } else if ("self-hosted".equalsIgnoreCase(pluginUsageMode) || "edit-only".equalsIgnoreCase(pluginUsageMode)) {
             selfHostedManager.createCustomDisc(player, finalAudioIdentifier, discName, audioType, discInfoFinal);
         }

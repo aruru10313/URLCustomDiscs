@@ -32,6 +32,8 @@ public class URLCustomDiscs extends JavaPlugin {
     private String uploadResourcePackURL;
     private String editOnlyModeZipFilePath;
     private String duplicatedZipFilePath;
+    private String oraxenPackFolder;
+    private String oraxenReloadCommand;
 
     @Override
     public void onEnable() {
@@ -54,7 +56,8 @@ public class URLCustomDiscs extends JavaPlugin {
 
         if (!"api".equalsIgnoreCase(pluginUsageMode) &&
                 !"self-hosted".equalsIgnoreCase(pluginUsageMode) &&
-                !"edit-only".equalsIgnoreCase(pluginUsageMode)) {
+                !"edit-only".equalsIgnoreCase(pluginUsageMode) &&
+                !"oraxen".equalsIgnoreCase(pluginUsageMode)) {
             getLogger().severe("Invalid pluginUsageMode in config.yml: '" + pluginUsageMode + "'");
             getLogger().severe("Plugin will be disabled.");
             getServer().getPluginManager().disablePlugin(this);
@@ -62,20 +65,27 @@ public class URLCustomDiscs extends JavaPlugin {
         }
 
         OS os = getOperatingSystemEnum();
-        if ("api".equalsIgnoreCase(pluginUsageMode) && localYtDlp) {
-            new DenoSetup(this, os).setup();
-            new YtDlpSetup(this, os).setup();
-        }
-        if ("self-hosted".equalsIgnoreCase(pluginUsageMode) || "edit-only".equalsIgnoreCase(pluginUsageMode)) {
-            new DenoSetup(this, os).setup();
-            new YtDlpSetup(this, os).setup();
-            new FFmpegSetup(this, os).setup();
+        // Downloading/updating the tools can take a while (FFmpeg is tens of MB), so do it off the
+        // main thread: enabling the plugin on a running server must not freeze it.
+        boolean needYtDlp = ("api".equalsIgnoreCase(pluginUsageMode) && localYtDlp) || isLocalMode();
+        boolean needFfmpeg = isLocalMode();
+        if (needYtDlp || needFfmpeg) {
+            getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                new DenoSetup(this, os).setup();
+                new YtDlpSetup(this, os).setup();
+                if (needFfmpeg) new FFmpegSetup(this, os).setup();
+                getLogger().info("Audio tools are ready.");
+            });
         }
 
         RemoteApiClient remoteApiClient = new RemoteApiClient(this, getApiBaseURL());
         SelfHostedManager selfHostedManager = new SelfHostedManager(this, os);
+        OraxenPackManager oraxenPackManager = new OraxenPackManager(this, os);
+        if (isOraxenMode() && !getServer().getPluginManager().isPluginEnabled("Oraxen")) {
+            getLogger().warning("pluginUsageMode is 'oraxen' but Oraxen is not enabled. Discs will be written to " + getOraxenPackFolder() + " but the pack will not be reloaded.");
+        }
 
-        Objects.requireNonNull(this.getCommand("customdisc")).setExecutor(new CommandURLCustomDiscs(this, os, remoteApiClient, selfHostedManager));
+        Objects.requireNonNull(this.getCommand("customdisc")).setExecutor(new CommandURLCustomDiscs(this, os, remoteApiClient, selfHostedManager, oraxenPackManager));
 
         // Detect the ProtocolLib plugin to enable custom Now Playing toasts
         boolean protocolLibEnabled = getServer().getPluginManager().isPluginEnabled("ProtocolLib");
@@ -152,7 +162,8 @@ public class URLCustomDiscs extends JavaPlugin {
                                 "# If you want to use a personal installation and configuration, fill in the pluginUsageMode field with 'self-hosted'.\n" +
                                 "# If you only want the URLCustomDiscsPack.zip resource pack to be updated locally in your server files and duplicated to a custom path with a custom name, fill in the pluginUsageMode field with 'edit-only'.\n" +
                                 "# Note: Edit-Only mode can be useful if you already have an HTTP server serving another resource pack, and if you have a plugin that allows you to merge your current resource pack with the URLCustomDiscsPack.zip resource pack.\n" +
-                                "pluginUsageMode: \"api\"\n" +
+                                "# If you use Oraxen, fill in the pluginUsageMode field with 'oraxen': discs are added to Oraxen's own resource pack (no separate pack, HTTP server or remote API needed).\n" +
+                                "pluginUsageMode: \"" + (getServer().getPluginManager().getPlugin("Oraxen") != null ? "oraxen" : "api") + "\"\n" +
                                 "\n" + "\n" +
 
                                 "# ========== REMOTE API MODE CONFIGURATION ==========\n" +
@@ -213,7 +224,16 @@ public class URLCustomDiscs extends JavaPlugin {
                                 "\n" +
                                 "# Path (including the custom filename) to the duplicated URLCustomDiscsPack.zip resource pack, relative to the plugins folder, for merging or other use.\n" +
                                 "# Example: OtherPlugin/merge_folder/PackToMerge.zip\n" +
-                                "duplicatedZipFilePath: \"URLCustomDiscs/edit-only_mode_reference_resource_pack/duplicated_resource_pack/DuplicatedURLCustomDiscsPack.zip\"\n"
+                                "duplicatedZipFilePath: \"URLCustomDiscs/edit-only_mode_reference_resource_pack/duplicated_resource_pack/DuplicatedURLCustomDiscsPack.zip\"\n" +
+                                "\n" + "\n" +
+                                "# ========== ORAXEN MODE CONFIGURATION ==========\n" +
+                                "\n" +
+                                "# Oraxen pack folder, relative to the plugins folder. Disc sounds are written to <folder>/assets/urlcustomdiscs/.\n" +
+                                "oraxenPackFolder: \"Oraxen/pack\"\n" +
+                                "\n" +
+                                "# Console command run after adding or deleting a disc so Oraxen rebuilds and resends its pack.\n" +
+                                "oraxenReloadCommand: \"oraxen reload pack\"\n" +
+                                "# Play a disc with: /playsound urlcustomdiscs:<disc_name> record @a ~ ~ ~ 1 1\n"
                         ;
                 try (FileWriter writer = new FileWriter(configFile)) {
                     writer.write(configContent);
@@ -234,6 +254,8 @@ public class URLCustomDiscs extends JavaPlugin {
         zipFileAbsolutePath = config.getString("zipFileAbsolutePath");
         uploadResourcePackURL = config.getString("uploadResourcePackURL");
         duplicatedZipFilePath = config.getString("duplicatedZipFilePath");
+        oraxenPackFolder = config.getString("oraxenPackFolder", "Oraxen/pack");
+        oraxenReloadCommand = config.getString("oraxenReloadCommand", "oraxen reload pack");
 
         if (pluginUsageMode == null) {
             getLogger().warning("config.yml ERROR : The plugin usage mode is not defined.");
@@ -282,7 +304,7 @@ public class URLCustomDiscs extends JavaPlugin {
         binFolder = new File(getDataFolder(), "bin");
         if (!binFolder.exists()) binFolder.mkdir();
 
-        if ("self-hosted".equalsIgnoreCase(pluginUsageMode) || "edit-only".equalsIgnoreCase(pluginUsageMode)) {
+        if (isLocalMode()) {
             editResourcePackFolder = new File(getDataFolder(), "edit_resource_pack");
             if (!editResourcePackFolder.exists()) editResourcePackFolder.mkdirs();
 
@@ -315,7 +337,7 @@ public class URLCustomDiscs extends JavaPlugin {
     public File getAudioFolder() {
         if ("api".equalsIgnoreCase(pluginUsageMode) && getLocalYtDlp()) {
             return audioToSendFolder;
-        } else if ("self-hosted".equalsIgnoreCase(pluginUsageMode) || "edit-only".equalsIgnoreCase(pluginUsageMode)) {
+        } else if (isLocalMode()) {
             return tempAudioFolder;
         } else {
             throw new IllegalStateException("Unknown pluginUsageMode: " + pluginUsageMode);
@@ -331,6 +353,19 @@ public class URLCustomDiscs extends JavaPlugin {
     public String getUploadResourcePackURL() { return uploadResourcePackURL; }
     public String getResourcePackAccessMode() { return resourcePackAccessMode; }
     public String getZipFileAbsolutePath() { return zipFileAbsolutePath; }
+
+    /** Modes that download/convert audio on this server (yt-dlp + FFmpeg). */
+    public boolean isLocalMode() {
+        return "self-hosted".equalsIgnoreCase(pluginUsageMode) || "edit-only".equalsIgnoreCase(pluginUsageMode) || isOraxenMode();
+    }
+    public boolean isOraxenMode() { return "oraxen".equalsIgnoreCase(pluginUsageMode); }
+    public String getOraxenPackFolder() { return oraxenPackFolder != null ? oraxenPackFolder : "Oraxen/pack"; }
+    public String getOraxenReloadCommand() { return oraxenReloadCommand != null ? oraxenReloadCommand : "oraxen reload pack"; }
+
+    /** Sound event of a disc: urlcustomdiscs:<name> in Oraxen mode, minecraft:customdisc.<name> otherwise. */
+    public String soundKey(String discName) {
+        return isOraxenMode() ? OraxenPackManager.soundKey(discName) : "minecraft:customdisc." + discName;
+    }
 
     // Edit-Only mode
     public File getEditOnlyModeReferenceResourcePackFolder() { return editOnlyModeReferenceResourcePackFolder; }

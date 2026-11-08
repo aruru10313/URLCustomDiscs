@@ -16,3 +16,6 @@ target/
 /FORME.md
 /PUBLISHREADME.md
 /OLDREADME.md
+
+### Local build (build.sh) ###
+/libs/

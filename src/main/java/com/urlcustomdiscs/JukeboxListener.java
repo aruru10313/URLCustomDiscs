@@ -144,7 +144,7 @@ public class JukeboxListener implements Listener {
                     event.setCancelled(true);
 
                     try {
-                        String soundKey = "customdisc." + discName;
+                        String soundKey = plugin.soundKey(discName);
 
                         // Store the custom disc for later ejection
                         ItemStack discToStore = itemInHand.clone();
@@ -289,7 +289,7 @@ public class JukeboxListener implements Listener {
                             jukeboxLocation.getBlockX() + " " +
                             jukeboxLocation.getBlockY() + " " +
                             jukeboxLocation.getBlockZ() +
-                            " run stopsound @a[distance=..80] * minecraft:" + currentSoundKey
+                            " run stopsound @a[distance=..80] * " + currentSoundKey
             );
         }
     }

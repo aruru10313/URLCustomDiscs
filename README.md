@@ -74,6 +74,16 @@ Vanilla command to play a custom track (can be used with coordinates):
 Vanilla command to stop a custom track:  
 `/stopsound @a * minecraft:customdisc.<disc_name>`
 
+## Oraxen Mode (this fork)
+If your server runs [Oraxen](https://oraxen.com), set `pluginUsageMode: "oraxen"` (picked automatically on first start when Oraxen is installed).
+- No separate resource pack, HTTP server or remote API: audio is downloaded (yt-dlp) and converted (FFmpeg) on your server.
+- Disc sounds are written into Oraxen's pack folder under their own namespace, `plugins/Oraxen/pack/assets/urlcustomdiscs/` (`sounds.json` + `sounds/<disc>.ogg`), so they never clash with the `sounds.json` Oraxen generates.
+- After a disc is created or deleted the plugin runs `oraxen reload pack`; Oraxen rebuilds, hosts and resends its merged pack to online players.
+- Sound events are `urlcustomdiscs:<disc_name>`: `/playsound urlcustomdiscs:<disc_name> record @a ~ ~ ~ 1 1`.
+- Settings: `oraxenPackFolder` (default `Oraxen/pack`, relative to `plugins/`) and `oraxenReloadCommand` (default `oraxen reload pack`).
+
+Also in this fork: the yt-dlp/Deno/FFmpeg setup runs off the main thread (enabling the plugin no longer freezes a running server), yt-dlp finds the bundled Deno/FFmpeg on PATH, a failed download no longer continues creating an empty disc, and it builds against the Paper 26.3 API (`build.sh`).
+
 ## Usage Modes
 The plugin offers **three modes of use**, depending on your setup and preferences:
 - **API Mode** (default):  
